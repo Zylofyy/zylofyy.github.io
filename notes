@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            min-height: 400px;
+        }
+        .widget {
+            background-color: #2c2c2c;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+        .widget-header h3 {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80%;
+            margin: 0;
+        }
+        .widget-content {
+            min-height: 100px;
+        }
+        .widget-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .remove-widget, .edit-widget {
+            background-color: #444;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .remove-widget {
+            background-color: #ff4d4d;
+        }
+        #add-widget {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .widget-placeholder {
+            border: 2px dashed #666;
+            border-radius: 5px;
+            background-color: #3a3a3a;
+        }
+        .dashboard-placeholder {
+            border: 2px dashed #666;
+            border-radius: 5px;
+            background-color: #3a3a3a;
+            padding: 20px;
+            text-align: center;
+            color: #888;
+            font-size: 18px;
+        }
+        .popup {
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2c2c2c;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            z-index: 1000;
+            width: 300px;
+        }
+        .popup input, .popup textarea {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #444;
+            border: 1px solid #666;
+            color: #e0e0e0;
+            border-radius: 3px;
+        }
+        .popup textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .popup-buttons {
+            display: flex;
+            justify-content: space-between;
+        }
+        .popup-buttons button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .save-widget {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .clear-fields {
+            background-color: #ff4d4d;
+            color: white;
+        }
+        .close-popup {
+            background-color: #444;
+            color: white;
+        }
+        .error-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #ff4d4d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+    <h1>Notes</h1>
+    <div class="dashboard">
+        <div class="dashboard-placeholder">Notes created will show up here</div>
+    </div>
+    <button id="add-widget">+</button>
+
+    <div class="popup" id="widget-popup">
+        <h2 id="popup-header">Edit Note</h2>
+        <input type="text" id="widget-title" placeholder="Title">
+        <textarea id="widget-content" placeholder="Content" rows="5"></textarea>
+        <div class="popup-buttons">
+            <button class="save-widget">Save</button>
+            <button class="clear-fields">Clear</button>
+            <button class="close-popup">Cancel</button>
+        </div>
+    </div>
+
+    <div class="error-message" id="error-message"></div>
+
+    <script>
+        $(function() {
+            let widgetCount = 0;
+            let currentWidgetId = null;
+
+            $(".dashboard").sortable({
+                items: ".widget",
+                cursor: "move",
+                opacity: 0.6,
+                revert: true,
+                placeholder: "widget-placeholder",
+                forcePlaceholderSize: true,
+                start: function(event, ui) {
+                    ui.placeholder.height(ui.item.height());
+                }
+            });
+
+            function showPopup(header, title, content) {
+                $("#popup-header").text(header);
+                $("#widget-title").val(title);
+                $("#widget-content").val(content);
+                $("#widget-popup").show();
+            }
+
+            function updateDashboardPlaceholder() {
+                if ($(".dashboard").children(".widget").length === 0) {
+                    $(".dashboard").html('<div class="dashboard-placeholder">Notes created will show up here</div>');
+                } else {
+                    $(".dashboard-placeholder").remove();
+                }
+            }
+
+            function showError(message) {
+                $("#error-message").text(message).fadeIn().delay(3000).fadeOut();
+            }
+
+            $("#add-widget").on("click", function() {
+                currentWidgetId = null;
+                showPopup("Add New Note", "", "");
+            });
+
+            $(document).on("click", ".edit-widget", function(e) {
+                e.stopPropagation();
+                const widget = $(this).closest(".widget");
+                currentWidgetId = widget.attr("id");
+                const title = widget.find("h3").text();
+                const content = widget.find(".widget-content p").text();
+                showPopup("Edit Note", title, content);
+            });
+
+            $(".save-widget").on("click", function() {
+                let title = $("#widget-title").val().trim();
+                const content = $("#widget-content").val().trim();
+
+                if (title === "" && content === "") {
+                    if (currentWidgetId) {
+                        // Silently delete the widget if it's edited to be empty
+                        $(`#${currentWidgetId}`).remove();
+                        updateDashboardPlaceholder();
+                        $("#widget-popup").hide();
+                    } else {
+                        // Show error for creating an empty widget
+                        showError("Notes can't be empty.");
+                        return; // Keep the popup open
+                    }
+                } else {
+                    if (title === "") {
+                        title = "Untitled";
+                    }
+
+                    if (currentWidgetId) {
+                        // Edit existing widget
+                        $(`#${currentWidgetId} h3`).text(title);
+                        $(`#${currentWidgetId} .widget-content p`).text(content);
+                    } else {
+                        // Add new widget
+                        widgetCount++;
+                        const newWidget = `
+                            <div class="widget" id="widget${widgetCount}">
+                                <div class="widget-header">
+                                    <h3>${title}</h3>
+                                    <div class="widget-actions">
+                                        <button class="edit-widget">Edit</button>
+                                        <button class="remove-widget">X</button>
+                                    </div>
+                                </div>
+                                <div class="widget-content">
+                                    <p>${content}</p>
+                                </div>
+                            </div>
+                        `;
+                        $(".dashboard").append(newWidget);
+                        $(".dashboard").sortable("refresh");
+                    }
+                    $("#widget-popup").hide();
+                }
+                updateDashboardPlaceholder();
+            });
+
+            $(".clear-fields").on("click", function() {
+                $("#widget-title").val("");
+                $("#widget-content").val("");
+            });
+
+            $(".close-popup").on("click", function() {
+                $("#widget-popup").hide();
+            });
+
+            $(document).on("click", ".remove-widget", function(e) {
+                e.stopPropagation();
+                $(this).closest(".widget").remove();
+                updateDashboardPlaceholder();
+            });
+
+            updateDashboardPlaceholder();
+        });
+    </script>
+</body>
+</html>
